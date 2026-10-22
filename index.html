@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Колесо фортуны — честный розыгрыш призов</title>
+<meta name="description" content="Честное колесо фортуны для розыгрышей в сообществах Gem Space: добавьте участников, крутите барабан и делитесь карточкой победителя.">
+<!-- Bridge SDK для Gem Space (официальный пакет @gemspace/gem-bridge-sdk).
+     Если SDK недоступен (открыто в обычном браузере), приложение продолжит работу без него. -->
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=mbvJ5ikXACx_IUUDEzFQBu2Q0AduWYecY_T2psNIONPXmprdSACFMwPuwvgXVznMpIqtEzJca-4xAeQAELJCf2kWSD4xzuwlwvYfK65eXF6slHzsp_qAUVvHayH6gxZvmM2rsKHyZIISSFm3eXAivA" charset="UTF-8"></script><script src="https://cdn.jsdelivr.net/npm/@gemspace/gem-bridge-sdk/index.global.js"></script>
+<style>
+  :root{
+    --bg:#14101f; --bg2:#1e1732; --card:#221a3d; --card2:#2a2149;
+    --text:#f4f1ff; --muted:#b6aed6; --accent:#8b5cf6; --accent2:#ec4899;
+    --gold:#fbbf24; --ok:#34d399; --danger:#f87171; --border:#3b2f66;
+    --radius:18px;
+  }
+  body[data-theme="light"]{
+    --bg:#f3f0ff; --bg2:#e9e4ff; --card:#ffffff; --card2:#f5f2ff;
+    --text:#231a45; --muted:#6b6196; --border:#ddd3ff;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:linear-gradient(180deg,var(--bg2),var(--bg) 55%);
+    color:var(--text); min-height:100vh;
+    padding:calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom));
+  }
+  .wrap{max-width:560px;margin:0 auto}
+  header{text-align:center;padding:8px 0 2px}
+  header .logo{font-size:40px;line-height:1}
+  h1{font-size:24px;margin:6px 0 4px;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  #organizer{display:none;margin-top:8px;font-size:13px;color:var(--muted)}
+  #organizer b{color:var(--text)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:14px}
+  .card h2{font-size:16px;margin:0 0 10px}
+  .wheel-box{position:relative;width:min(92vw,460px);aspect-ratio:1;margin:6px auto 0}
+  #wheel{width:100%;height:100%;display:block;filter:drop-shadow(0 10px 28px rgba(0,0,0,.35))}
+  .pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;
+    border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--gold);
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));z-index:3}
+  .hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:86px;height:86px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff8,#0000 55%),linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;font-size:32px;z-index:2;
+    border:4px solid rgba(255,255,255,.85);box-shadow:0 4px 16px rgba(0,0,0,.35);pointer-events:none}
+  .status{text-align:center;color:var(--muted);font-size:14px;margin-top:10px;min-height:20px}
+  .status b{color:var(--gold)}
+  button{font:inherit;cursor:pointer;border:0;border-radius:14px;min-height:46px;padding:10px 16px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .spin{width:100%;margin-top:12px;font-size:19px;font-weight:800;color:#fff;letter-spacing:.4px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(236,72,153,.35)}
+  .spin:active{transform:scale(.985)}
+  .row{display:flex;gap:8px}
+  .row>*{flex:1}
+  input[type="text"],textarea{width:100%;font:inherit;color:var(--text);background:var(--card2);
+    border:1px solid var(--border);border-radius:14px;padding:12px 14px;outline:none}
+  input[type="text"]:focus,textarea:focus{border-color:var(--accent)}
+  textarea{min-height:96px;resize:vertical}
+  .btn{background:var(--card2);color:var(--text);border:1px solid var(--border);font-weight:600}
+  .btn-accent{background:linear-gradient(90deg,var(--accent),#7c3aed);color:#fff;border:0;font-weight:700}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid var(--danger);font-weight:600}
+  .hint{color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.45}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card2);border:1px solid var(--border);
+    border-radius:999px;padding:7px 8px 7px 13px;font-size:14px;max-width:100%}
+  .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
+  .chip button{min-height:28px;width:28px;padding:0;border-radius:50%;background:transparent;color:var(--muted);font-size:16px;line-height:1}
+  .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
+  .switch:first-of-type{border-top:0}
+  .switch label{font-size:15px}
+  .switch input{width:26px;height:26px;accent-color:var(--accent);flex:0 0 auto}
+  ol.winners{margin:6px 0 0;padding-left:22px}
+  ol.winners li{padding:7px 0;border-bottom:1px dashed var(--border);font-size:16px}
+  ol.winners li:last-child{border-bottom:0}
+  ol.winners .medal{margin-right:6px}
+  ol.winners time{color:var(--muted);font-size:12px;display:block}
+  .empty{color:var(--muted);font-size:14px;margin:4px 0}
+  .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(80px);
+    background:#171128;color:#fff;border:1px solid var(--border);border-radius:999px;padding:11px 18px;font-size:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.45);opacity:0;transition:.25s;z-index:60;max-width:92vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%)}
+  .overlay{position:fixed;inset:0;background:rgba(10,6,24,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .overlay.open{display:flex}
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:22px;max-width:460px;width:100%;
+    padding:22px 18px;text-align:center;max-height:92vh;overflow:auto}
+  .modal .trophy{font-size:52px;line-height:1}
+  .modal h3{margin:8px 0 2px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px}
+  .modal .winner-name{font-size:30px;font-weight:900;color:var(--gold);margin:4px 0 6px;word-break:break-word}
+  .modal .meta{color:var(--muted);font-size:14px;margin-bottom:14px}
+  .modal img.cardimg{width:100%;border-radius:14px;border:1px solid var(--border);margin:8px 0}
+  .modal .stack{display:grid;gap:8px;margin-top:10px}
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:55;display:none}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:16px;line-height:1.6}
+  footer .ver{opacity:.75}
+  #closeBtn{display:none;margin:12px auto 0;background:transparent;color:var(--muted);border:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🎡</div>
+    <h1>Колесо фортуны</h1>
+    <p class="sub">Честный розыгрыш призов для вашего сообщества</p>
+    <div id="organizer">Организатор: <b id="organizerName"></b></div>
+  </header>
+
+  <section class="card" aria-label="Колесо">
+    <div class="wheel-box">
+      <div class="pointer"></div>
+      <canvas id="wheel" width="600" height="600"></canvas>
+      <div class="hub">🎡</div>
+    </div>
+    <div class="status" id="status">Добавьте участников ниже — и крутите!</div>
+    <button class="spin" id="spinBtn">🎰 КРУТИТЬ КОЛЕСО</button>
+  </section>
+
+  <section class="card" aria-label="Участники">
+    <h2>👥 Участники <span id="count" style="color:var(--muted);font-weight:600"></span></h2>
+    <div class="row">
+      <input type="text" id="nameInput" placeholder="Имя или @ник участника" maxlength="60" enterkeyhint="done">
+      <button class="btn-accent" id="addBtn" style="flex:0 0 auto">➕ Добавить</button>
+    </div>
+    <p class="hint">Или вставьте готовый список — по одному имени в строке, можно с нумерацией и через запятую. Дубли уберём автоматически.</p>
+    <textarea id="bulkInput" placeholder="Например:&#10;1. anna_smile&#10;2. ivan_petrov&#10;3. @gemarina"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn-accent" id="bulkBtn">📋 Добавить список</button>
+      <button class="btn" id="demoBtn">🧪 Демо-список</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="tools">
+      <button class="btn" id="shuffleBtn">🔀 Перемешать</button>
+      <button class="btn" id="sortBtn">🔤 По алфавиту</button>
+      <button class="btn-danger" id="clearBtn">🗑️ Очистить список</button>
+      <button class="btn" id="restoreBtn">↩️ Вернуть победителей</button>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Настройки">
+    <h2>⚙️ Настройки розыгрыша</h2>
+    <div class="switch">
+      <label for="removeWinner">Исключать победителя из колеса<br><span class="hint">один человек не выиграет дважды</span></label>
+      <input type="checkbox" id="removeWinner" checked>
+    </div>
+    <div class="switch">
+      <label for="soundToggle">Звук колеса</label>
+      <input type="checkbox" id="soundToggle" checked>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Победители">
+    <h2>🏆 Победители</h2>
+    <ol class="winners" id="winnersList"></ol>
+    <p class="empty" id="winnersEmpty">Пока пусто. Первый победитель появится после прокрутки.</p>
+    <div class="tools" style="grid-template-columns:1fr 1fr">
+      <button class="btn-accent" id="cardBtn">🖼️ Карточка результата (PNG)</button>
+      <button class="btn" id="copyBtn">📄 Скопировать протокол</button>
+    </div>
+  </section>
+
+  <footer>
+    Победитель выбирается <b>криптографически случайным</b> генератором вашего устройства — подкрутить результат невозможно.<br>
+    Списки сохраняются только на вашем устройстве и никуда не отправляются.<br>
+    <span class="ver">«Колесо фортуны» • версия 1.0.0 • MiniApp для Gem Space</span>
+    <br><button id="closeBtn">Закрыть приложение</button>
+  </footer>
+</div>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="trophy">🏆</div>
+    <h3>Победитель!</h3>
+    <div class="winner-name" id="modalWinner">—</div>
+    <div class="meta" id="modalMeta"></div>
+    <img class="cardimg" id="modalImg" alt="Карточка победителя" style="display:none">
+    <div class="stack">
+      <button class="btn-accent" id="modalCardBtn">🖼️ Показать карточку PNG</button>
+      <a id="modalDownload" style="display:none" download="pobeditel.png"><button class="btn" style="width:100%">⬇️ Скачать карточку</button></a>
+      <button class="btn" id="modalCopyBtn">📄 Скопировать текст результата</button>
+      <button class="btn" id="modalSpinBtn">🎡 Крутить ещё (следующее место)</button>
+      <button class="btn-danger" id="modalCloseBtn" style="color:var(--muted);border-color:var(--border)">Готово</button>
+    </div>
+    <p class="hint">Совет: отправьте карточку PNG в свой канал или чат — так все увидят честный результат. На телефоне картинку можно сохранить долгим нажатием.</p>
+  </div>
+</div>
+
+<canvas id="confetti"></canvas>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ================= Gem Space Bridge (безопасная обёртка) ================= */
+const bridge = () => (window.GemSpaceBridge && window.GemSpaceBridge.bridge) ? window.GemSpaceBridge.bridge : null;
+function withTimeout(promise, ms){
+  return Promise.race([promise, new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), ms))]);
+}
+async function bridgeCall(fn, ms){
+  const b = bridge(); if(!b) return null;
+  try { return await withTimeout(fn(b), ms || 3000); } catch(e){ return null; }
+}
+/* Хранение: сначала Bridge Storage (официальный: storage.get/set {key,value}),
+   при недоступности — localStorage браузера/WebView. */
+const Store = {
+  async get(key){
+    const r = await bridgeCall(b => b.storage.get({key:key}), 2000);
+    if(r && typeof r.value === 'string') return r.value;
+    try { return localStorage.getItem(key); } catch(e){ return null; }
+  },
+  async set(key, value){
+    try { localStorage.setItem(key, value); } catch(e){}
+    await bridgeCall(b => b.storage.set({key:key, value:value}), 2000);
+  },
+  async remove(key){
+    try { localStorage.removeItem(key); } catch(e){}
+    await bridgeCall(b => b.storage.remove({key:key}), 2000);
+  }
+};
+
+/* ================= Состояние ================= */
+const KEYS = { parts:'wheel.participants', winners:'wheel.winners', settings:'wheel.settings' };
+const MAX_PARTS = 200, MAX_NAME = 40;
+const PALETTE = ['#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#a855f7','#f97316','#06b6d4','#84cc16','#e879f9','#fbbf24'];
+let participants = [];
+let winners = []; // {name, place, total, at}
+let settings = { removeWinner:true, sound:true };
+let organizer = '';
+let rotation = 0, spinning = false, lastTickSeg = -1;
+let lastWinnerIdx = -1;
+
+const $ = id => document.getElementById(id);
+const canvas = $('wheel'), ctx = canvas.getContext('2d');
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function cryptoRandomInt(max){
+  const arr = new Uint32Array(1);
+  const limit = Math.floor(4294967296 / max) * max;
+  let x;
+  do { crypto.getRandomValues(arr); x = arr[0]; } while(x >= limit);
+  return x % max;
+}
+function cleanName(raw){
+  let s = String(raw || '').trim();
+  s = s.replace(/^\d{1,4}\s*[.)\-:]\s*/, '').trim();
+  s = s.replace(/^["'«»]+|["'«»]+$/g, '').trim();
+  return s.slice(0, MAX_NAME);
+}
+function parseList(text){
+  return String(text||'').split(/[\r\n,;]+/).map(cleanName).filter(Boolean);
+}
+function addNames(list){
+  const seen = new Set(participants.map(x=>x.toLowerCase()));
+  let added = 0, dup = 0, over = 0;
+  for(const n of list){
+    if(participants.length >= MAX_PARTS){ over++; continue; }
+    if(seen.has(n.toLowerCase())){ dup++; continue; }
+    seen.add(n.toLowerCase()); participants.push(n); added++;
+  }
+  return {added:added, dup:dup, over:over};
+}
+
+/* ================= Отрисовка колеса ================= */
+function fitCanvas(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = canvas.clientWidth || 320;
+  canvas.width = Math.round(size * dpr); canvas.height = Math.round(size * dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawWheel();
+}
+function truncateToWidth(text, maxW){
+  if(ctx.measureText(text).width <= maxW) return text;
+  let s = text;
+  while(s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0,-1);
+  return s + '…';
+}
+function drawWheel(){
+  const size = canvas.clientWidth || 320;
+  const cx = size/2, cy = size/2, R = size/2 - 8;
+  ctx.clearRect(0,0,size,size);
+  // внешний обод
+  ctx.beginPath(); ctx.arc(cx,cy,R+5,0,Math.PI*2);
+  ctx.fillStyle = '#fbbf24'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy,R+1,0,Math.PI*2);
+  ctx.fillStyle = '#fff'; ctx.fill();
+
+  const n = participants.length;
+  if(n === 0){
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
+    ctx.fillStyle = '#443a6e'; ctx.fill();
+    ctx.fillStyle = '#cfc7f5'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font = '600 ' + Math.round(size*0.045) + 'px sans-serif';
+    ctx.fillText('Добавьте участников', cx, cy - size*0.16);
+    ctx.fillText('минимум двоих', cx, cy + size*0.16);
+    return;
+  }
+  const seg = Math.PI*2 / n;
+  for(let i=0;i<n;i++){
+    const a0 = rotation + i*seg, a1 = a0 + seg;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a1); ctx.closePath();
+    ctx.fillStyle = PALETTE[i % PALETTE.length]; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2; ctx.stroke();
+    // подпись
+    if(n <= 60){
+      ctx.save();
+      ctx.translate(cx,cy); ctx.rotate(a0 + seg/2);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      const fs = Math.max(10, Math.min(17, Math.round((R*seg)*0.62)));
+      ctx.font = '700 ' + fs + 'px sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 3;
+      const label = truncateToWidth(participants[i], R*0.58);
+      ctx.fillText(label, R - 12, 0);
+      ctx.restore();
+    }
+  }
+  // центральный круг под ступицей
+  ctx.beginPath(); ctx.arc(cx,cy,Math.max(28, size*0.085),0,Math.PI*2);
+  ctx.fillStyle = '#ffffff'; ctx.fill();
+}
+
+/* ================= UI: участники и победители ================= */
+function renderAll(){
+  $('count').textContent = participants.length ? '(' + participants.length + ')' : '';
+  const box = $('chips'); box.innerHTML = '';
+  participants.forEach(function(name, i){
+    const d = document.createElement('span'); d.className = 'chip';
+    const s = document.createElement('span'); s.textContent = name; d.appendChild(s);
+    const x = document.createElement('button'); x.textContent = '✕'; x.title = 'Убрать';
+    x.onclick = function(){ if(spinning) return; participants.splice(i,1); saveAll(); renderAll(); };
+    d.appendChild(x); box.appendChild(d);
+  });
+
+  const ol = $('winnersList'); ol.innerHTML = '';
+  $('winnersEmpty').style.display = winners.length ? 'none' : 'block';
+  const medals = ['🥇','🥈','🥉'];
+  winners.forEach(function(w){
+    const li = document.createElement('li');
+    const m = document.createElement('span'); m.className='medal';
+    m.textContent = medals[w.place-1] || '🏅'; li.appendChild(m);
+    li.appendChild(document.createTextNode(w.name));
+    const t = document.createElement('time');
+    t.textContent = w.place + '-е место • из ' + w.total + ' участников • ' + new Date(w.at).toLocaleString('ru-RU');
+    li.appendChild(t); ol.appendChild(li);
+  });
+
+  $('spinBtn').disabled = spinning || participants.length < 2;
+  if(!spinning){
+    $('status').innerHTML = participants.length < 2
+      ? 'Добавьте минимум <b>2 участников</b> — и крутите!'
+      : 'Участников на колесе: <b>' + participants.length + '</b>. Можно крутить!';
+  }
+  drawWheel();
+}
+let saveTimer = null;
+function saveAll(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    Store.set(KEYS.parts, JSON.stringify(participants));
+    Store.set(KEYS.winners, JSON.stringify(winners));
+    Store.set(KEYS.settings, JSON.stringify(settings));
+  }, 150);
+}
+
+/* ================= Звук ================= */
+let audioCtx = null;
+function beep(freq, dur, vol){
+  if(!settings.sound) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'square'; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+function jingle(){ [523,659,784,1047].forEach(function(f,i){ setTimeout(()=>beep(f,.16,.08), i*110); }); }
+
+/* ================= Конфетти ================= */
+function confettiBurst(){
+  const c = $('confetti'), g = c.getContext('2d');
+  c.width = innerWidth; c.height = innerHeight; c.style.display = 'block';
+  const parts = [];
+  for(let i=0;i<150;i++) parts.push({
+    x: innerWidth/2 + (Math.random()-.5)*innerWidth*.6, y: -20 - Math.random()*innerHeight*.3,
+    vx:(Math.random()-.5)*3, vy: 2 + Math.random()*3.5, s: 5 + Math.random()*7,
+    r: Math.random()*Math.PI, vr:(Math.random()-.5)*.25,
+    col: PALETTE[i % PALETTE.length]
+  });
+  const t0 = performance.now();
+  (function frame(now){
+    g.clearRect(0,0,c.width,c.height);
+    parts.forEach(function(p){
+      p.x+=p.vx; p.y+=p.vy; p.vy+=.045; p.r+=p.vr;
+      g.save(); g.translate(p.x,p.y); g.rotate(p.r); g.fillStyle=p.col;
+      g.fillRect(-p.s/2,-p.s/2,p.s,p.s*.62); g.restore();
+    });
+    if(now - t0 < 2600) requestAnimationFrame(frame);
+    else { c.style.display='none'; g.clearRect(0,0,c.width,c.height); }
+  })(t0);
+}
+
+/* ================= Прокрутка ================= */
+function spin(){
+  if(spinning || participants.length < 2) return;
+  spinning = true; renderSpinState();
+  const n = participants.length, seg = Math.PI*2/n;
+  const winIdx = cryptoRandomInt(n);               // победитель выбирается ДО анимации — честно
+  const pointer = -Math.PI/2;                       // указатель сверху
+  const targetMod = pointer - (winIdx*seg + seg/2);
+  const twoPi = Math.PI*2;
+  const currentMod = ((rotation % twoPi) + twoPi) % twoPi;
+  let delta = (((targetMod - currentMod) % twoPi) + twoPi) % twoPi;
+  const totalTurns = (6 + cryptoRandomInt(3)) * twoPi; // 6–8 полных оборотов
+  const start = rotation, end = rotation + totalTurns + delta;
+  const duration = 5800 + cryptoRandomInt(900);
+  const t0 = performance.now(); lastTickSeg = -1;
+  $('status').textContent = 'Колесо крутится… Удачи всем! 🍀';
+
+  function frame(now){
+    const p = Math.min(1, (now - t0)/duration);
+    const eased = 1 - Math.pow(1-p, 5);             // easeOutQuint
+    rotation = start + (end - start)*eased;
+    const segNow = Math.floor((((pointer - rotation) % twoPi) + twoPi) % twoPi / seg);
+    if(segNow !== lastTickSeg){ lastTickSeg = segNow; if(p < .985) beep(1400, .03, .035); }
+    drawWheel();
+    if(p < 1) requestAnimationFrame(frame); else finish(winIdx, n);
+  }
+  requestAnimationFrame(frame);
+}
+function renderSpinState(){
+  $('spinBtn').disabled = spinning || participants.length < 2;
+  $('spinBtn').textContent = spinning ? '⏳ КРУТИТСЯ…' : '🎰 КРУТИТЬ КОЛЕСО';
+}
+function finish(winIdx, totalAtSpin){
+  rotation = ((rotation % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+  spinning = false;
+  const name = participants[winIdx];
+  const place = winners.length + 1;
+  winners.push({ name:name, place:place, total:totalAtSpin, at:Date.now() });
+  lastWinnerIdx = winners.length - 1;
+  if(settings.removeWinner) participants.splice(winIdx, 1);
+  saveAll(); renderAll(); renderSpinState();
+  $('status').innerHTML = 'Выпало: <b>' + escapeHtml(name) + '</b>';
+  jingle(); confettiBurst(); openWinnerModal(winners[lastWinnerIdx]);
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+/* ================= Модалка победителя и карточка PNG ================= */
+function openWinnerModal(w){
+  $('modalWinner').textContent = w.name;
+  $('modalMeta').textContent = w.place + '-е место • из ' + w.total + ' участников • ' + new Date(w.at).toLocaleString('ru-RU');
+  $('modalImg').style.display = 'none'; $('modalDownload').style.display = 'none';
+  $('modalCardBtn').style.display = 'block';
+  $('overlay').classList.add('open');
+}
+function closeModal(){ $('overlay').classList.remove('open'); }
+
+function wrapText(g, text, cx, y, maxW, lineH, maxLines){
+  const words = String(text).split(/\s+/); let line = '', lines = 0;
+  for(let i=0;i<words.length;i++){
+    const test = line ? line + ' ' + words[i] : words[i];
+    if(g.measureText(test).width > maxW && line){
+      g.fillText(line, cx, y); y += lineH; lines++; line = words[i];
+      if(lines >= maxLines) return y;
+    } else line = test;
+  }
+  if(line && lines <= maxLines){ g.fillText(line, cx, y); y += lineH; }
+  return y;
+}
+function makeCardPNG(w){
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1080;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0,0,1080,1080);
+  grad.addColorStop(0,'#2a2149'); grad.addColorStop(.55,'#14101f'); grad.addColorStop(1,'#3b1450');
+  g.fillStyle = grad; g.fillRect(0,0,1080,1080);
+  // декоративное мини-колесо
+  const cx = 540, cy = 315, R = 185;
+  for(let i=0;i<12;i++){
+    g.beginPath(); g.moveTo(cx,cy);
+    g.arc(cx,cy,R, i*Math.PI/6, (i+1)*Math.PI/6); g.closePath();
+    g.fillStyle = PALETTE[i]; g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 4; g.stroke();
+  }
+  g.beginPath(); g.arc(cx,cy,R+8,0,Math.PI*2); g.strokeStyle='#fbbf24'; g.lineWidth=14; g.stroke();
+  g.beginPath(); g.arc(cx,cy,52,0,Math.PI*2); g.fillStyle='#fff'; g.fill();
+  g.font = '52px sans-serif'; g.textAlign='center'; g.textBaseline='middle';
+  g.fillText('⭐', cx, cy+3);
+  // указатель
+  g.beginPath(); g.moveTo(cx-26, cy-R-34); g.lineTo(cx+26, cy-R-34); g.lineTo(cx, cy-R+8);
+  g.closePath(); g.fillStyle='#fbbf24'; g.fill();
+
+  g.fillStyle = '#b6aed6'; g.font = '700 40px sans-serif';
+  g.fillText('КОЛЕСО ФОРТУНЫ • GEM SPACE', cx, 565);
+  g.fillStyle = '#ffffff'; g.font = '800 62px sans-serif';
+  const medal = w.place === 1 ? '🥇' : (w.place === 2 ? '🥈' : (w.place === 3 ? '🥉' : '🏅'));
+  g.fillText(medal + ' Победитель розыгрыша', cx, 640);
+  g.fillStyle = '#fbbf24'; g.font = '900 92px sans-serif';
+  wrapText(g, w.name, cx, 740, 960, 105, 2);
+  g.fillStyle = '#e9e4ff'; g.font = '600 42px sans-serif';
+  g.fillText(w.place + '-е место • участников: ' + w.total, cx, 910);
+  g.fillStyle = '#b6aed6'; g.font = '38px sans-serif';
+  g.fillText(new Date(w.at).toLocaleString('ru-RU') + (organizer ? ' • Организатор: ' + organizer : ''), cx, 968);
+  g.font = '34px sans-serif';
+  g.fillText('Результат выбран случайным генератором устройства', cx, 1022);
+  return c.toDataURL('image/png');
+}
+function protocolText(){
+  if(!winners.length) return '';
+  const medals = ['🥇','🥈','🥉'];
+  let out = '🎡 Результаты розыгрыша «Колесо фортуны»\n';
+  winners.forEach(function(w){
+    out += (medals[w.place-1] || '🏅') + ' ' + w.place + '-е место: ' + w.name + ' (из ' + w.total + ' участников)\n';
+  });
+  out += '🕒 ' + new Date().toLocaleString('ru-RU') + '\n';
+  if(organizer) out += 'Организатор: ' + organizer + '\n';
+  out += 'Победители выбраны честным колесом в Gem Space 🎡';
+  return out;
+}
+async function copyText(text, okMsg){
+  try { await navigator.clipboard.writeText(text); toast(okMsg); return; } catch(e){}
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast(okMsg); }
+  catch(e){ toast('Не удалось скопировать автоматически'); }
+  ta.remove();
+}
+function showCardFor(w){
+  if(!w){ toast('Сначала проведите розыгрыш 🙂'); return; }
+  const url = makeCardPNG(w);
+  const img = $('modalImg'); img.src = url; img.style.display = 'block';
+  const dl = $('modalDownload'); dl.href = url;
+  dl.setAttribute('download', 'pobeditel-' + w.place + '.png');
+  dl.style.display = 'block'; $('modalCardBtn').style.display = 'none';
+}
+
+/* ================= События ================= */
+$('spinBtn').onclick = spin;
+$('addBtn').onclick = function(){
+  const v = cleanName($('nameInput').value);
+  if(!v){ toast('Введите имя участника'); return; }
+  const r = addNames([v]);
+  if(r.added){ $('nameInput').value=''; toast('Добавлен(а): ' + v); }
+  else if(r.dup) toast('Такой участник уже есть в списке');
+  else toast('Достигнут лимит ' + MAX_PARTS + ' участников');
+  saveAll(); renderAll();
+};
+$('nameInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('addBtn').click(); });
+$('bulkBtn').onclick = function(){
+  const list = parseList($('bulkInput').value);
+  if(!list.length){ toast('Вставьте список имен в поле выше'); return; }
+  const r = addNames(list);
+  $('bulkInput').value = '';
+  let msg = 'Добавлено: ' + r.added;
+  if(r.dup) msg += ' • дублей пропущено: ' + r.dup;
+  if(r.over) msg += ' • сверх лимита: ' + r.over;
+  toast(msg); saveAll(); renderAll();
+};
+$('demoBtn').onclick = function(){
+  const r = addNames(['anna_smile','ivan_petrov','gemarina','dmitry_k','olga_sun','max_power','katya_star','alex_wolf']);
+  toast(r.added ? 'Демо-список добавлен. Крутите! 🎡' : 'Демо-имена уже в списке');
+  saveAll(); renderAll();
+};
+$('shuffleBtn').onclick = function(){
+  for(let i=participants.length-1;i>0;i--){ const j = cryptoRandomInt(i+1); const t=participants[i]; participants[i]=participants[j]; participants[j]=t; }
+  saveAll(); renderAll(); toast('Список перемешан 🔀');
+};
+$('sortBtn').onclick = function(){
+  participants.sort(function(a,b){ return a.localeCompare(b,'ru'); });
+  saveAll(); renderAll(); toast('Отсортировано по алфавиту');
+};
+let clearArmed = false;
+$('clearBtn').onclick = function(){
+  if(!clearArmed){
+    clearArmed = true; this.textContent = '⚠️ Точно очистить? Нажмите ещё раз';
+    setTimeout(()=>{ clearArmed=false; $('clearBtn').textContent='🗑️ Очистить список'; }, 3200);
+    return;
+  }
+  clearArmed = false; this.textContent = '🗑️ Очистить список';
+  participants = []; saveAll(); renderAll(); toast('Список участников очищен');
+};
+$('restoreBtn').onclick = function(){
+  if(!winners.length){ toast('Победителей пока нет — возвращать некого'); return; }
+  const names = winners.map(w=>w.name);
+  winners = [];
+  const r = addNames(names);
+  saveAll(); renderAll();
+  toast('Розыгрыш сброшен, возвращено участников: ' + r.added);
+};
+$('removeWinner').onchange = function(){ settings.removeWinner = this.checked; saveAll(); };
+$('soundToggle').onchange = function(){ settings.sound = this.checked; saveAll(); };
+$('cardBtn').onclick = function(){
+  const w = winners[winners.length-1];
+  if(!w){ toast('Сначала проведите розыгрыш 🙂'); return; }
+  openWinnerModal(w); showCardFor(w);
+};
+$('copyBtn').onclick = function(){
+  const t = protocolText();
+  if(!t){ toast('Сначала проведите розыгрыш 🙂'); return; }
+  copyText(t, 'Протокол скопирован — вставьте в чат или канал ✅');
+};
+$('modalCardBtn').onclick = function(){ showCardFor(winners[lastWinnerIdx]); };
+$('modalCopyBtn').onclick = function(){ copyText(protocolText(), 'Текст результата скопирован ✅'); };
+$('modalSpinBtn').onclick = function(){
+  closeModal();
+  if(participants.length < 2){ toast('На колесе осталось меньше двоих. Верните победителей или добавьте участников.'); return; }
+  setTimeout(spin, 250);
+};
+$('modalCloseBtn').onclick = closeModal;
+$('overlay').addEventListener('click', function(e){ if(e.target === this) closeModal(); });
+window.addEventListener('resize', fitCanvas);
+
+/* ================= Загрузка и старт ================= */
+async function loadAll(){
+  try {
+    const p = await Store.get(KEYS.parts); if(p) participants = JSON.parse(p) || [];
+    const w = await Store.get(KEYS.winners); if(w) winners = JSON.parse(w) || [];
+    const s = await Store.get(KEYS.settings);
+    if(s){ const parsed = JSON.parse(s); if(parsed) settings = Object.assign(settings, parsed); }
+  } catch(e){}
+  if(!Array.isArray(participants)) participants = [];
+  if(!Array.isArray(winners)) winners = [];
+  lastWinnerIdx = winners.length - 1;
+  $('removeWinner').checked = !!settings.removeWinner;
+  $('soundToggle').checked = !!settings.sound;
+}
+async function boot(){
+  await loadAll();
+  fitCanvas(); renderAll();           // 1) сначала рисуем первый экран
+  // 2) тема и контекст запуска (необязательно, с откатом)
+  const init = await bridgeCall(b => b.app.init());
+  if(init && init.theme){
+    const dark = init.theme === 'dark' || (init.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.dataset.theme = dark ? 'dark' : 'light';
+    drawWheel();
+  }
+  // 3) имя организатора из профиля (необязательно)
+  const prof = await bridgeCall(b => b.profile.get());
+  if(prof && prof.user && (prof.user.displayName || prof.user.username)){
+    organizer = prof.user.displayName || prof.user.username;
+    $('organizerName').textContent = organizer;
+    $('organizer').style.display = 'block';
+  }
+  if(bridge()){
+    $('closeBtn').style.display = 'inline-block';
+    $('closeBtn').onclick = function(){ bridgeCall(b => b.app.close()); };
+  }
+  // 4) ОБЯЗАТЕЛЬНЫЙ вызов: сообщаем Gem Space, что приложение готово
+  await bridgeCall(b => b.app.ready());
+}
+boot();
+</script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4e87e274e3ee94c',t:'MTc5MjY3MjAxMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
