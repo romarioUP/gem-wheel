@@ -1,0 +1,13 @@
+{
+  "my_group": [
+    "Anna Smile",
+    "ivan_petrov",
+    "@gemarina",
+    { "username": "dmitry_k", "display_name": "Дмитрий К" },
+    "Olga Sun"
+  ],
+  "drugaya_gruppa": [
+    "max_power",
+    "katya_star"
+  ]
+}

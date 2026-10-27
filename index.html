@@ -5,6 +5,36 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Колесо фортуны — честный розыгрыш призов</title>
 <meta name="description" content="Честное колесо фортуны для розыгрышей в сообществах Gem Space: добавьте участников, крутите барабан и делитесь карточкой победителя.">
+<!--
+  «Колесо фортуны» • MiniApp для Gem Space • v1.3.0
+  Изменения в 1.3.0:
+  • «Участники по логину» — выгрузка списка участников по @логину группы из
+    настраиваемого «шлюза участников» (например, groups.json рядом с приложением,
+    или свой API с параметром {group} в URL). Один раз сохранили список — дальше
+    розыгрыш на любой группе за два клика: «@логин → Выгрузить».
+    Официальный API Gem Space не выдаёт списки участников групп мини-аппам
+    (9 методов Bridge SDK — без members), поэтому источником служит ваш шлюз;
+    когда платформа даст официальный доступ — достаточно подставить его URL.
+  Изменения в 1.2.0:
+  • «Парсер групп» — автозагрузка участников из скопированного текста: список
+    участников группы, комментарии под постом, пересланные сообщения. Парсер сам
+    извлекает @ники и имена, убирает нумерацию/маркеры/дубли/заголовки.
+    (API Gem Space не выдаёт список участников групп мини-аппам — см. документацию
+    gem-miniapps.web.app/docs/bridge-sdk — поэтому сканирование делается через
+    вставку скопированного списка.)
+  Изменения в 1.1.x (UI-fix по отзыву модерации):
+  • Колесо больше не выходит за границы блока/экрана: размер берётся от контейнера
+    (min(100%, …)), а не от ширины вьюпорта (92vw) — раньше круг переполнял карточку
+    на узких экранах и смещался вправо.
+  • Тройная защита от переполнения (v1.1.1):
+      1) CSS-размер от контейнера (min/max/clamp),
+      2) overflow:hidden на карточке колеса — ничего не может нарисоваться за блоком,
+      3) JS-замер реальной ширины карточки при каждом ресайзе (страховка для старых WebView).
+  • Ограничение по высоте экрана (dvh) для ландшафтной ориентации.
+  • Ступица и указатель масштабируются вместе с колесом.
+  • ResizeObserver: колесо перерисовывается при любом изменении размера контейнера.
+  • Мелкие правки: перенос длинных имен в чипах, кнопки-инструменты адаптируются.
+-->
 <!-- Bridge SDK для Gem Space (официальный пакет @gemspace/gem-bridge-sdk).
      Если SDK недоступен (открыто в обычном браузере), приложение продолжит работу без него. -->
 <script src="https://cdn.jsdelivr.net/npm/@gemspace/gem-bridge-sdk/index.global.js"></script>
@@ -21,13 +51,16 @@
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0}
+  /* страховка от горизонтального скролла в вебвью: контент и так вписан в блок,
+     но на всякий случай переполнение по X обрезается */
   body{
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     background:linear-gradient(180deg,var(--bg2),var(--bg) 55%);
     color:var(--text); min-height:100vh;
-    padding:calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom));
+    padding:calc(14px + env(safe-area-inset-top)) clamp(12px,4vw,18px) calc(20px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
   }
-  .wrap{max-width:560px;margin:0 auto}
+  .wrap{width:100%;max-width:560px;margin:0 auto}
   header{text-align:center;padding:8px 0 2px}
   header .logo{font-size:40px;line-height:1}
   h1{font-size:24px;margin:6px 0 4px;letter-spacing:.2px}
@@ -36,25 +69,47 @@
   #organizer b{color:var(--text)}
   .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-top:14px}
   .card h2{font-size:16px;margin:0 0 10px}
-  .wheel-box{position:relative;width:min(92vw,460px);aspect-ratio:1;margin:6px auto 0}
-  #wheel{width:100%;height:100%;display:block;filter:drop-shadow(0 10px 28px rgba(0,0,0,.35))}
-  .pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:0;height:0;
-    border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--gold);
-    filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));z-index:3}
-  .hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:86px;height:86px;border-radius:50%;
+  /* карточка колеса: жёстко обрезает всё, что попытается выйти за границы блока */
+  .card-wheel{overflow:hidden}
+
+  /* ===== КОЛЕСО: размер только от контейнера — никогда не выходит за блок ===== */
+  .wheel-box{
+    position:relative;
+    width:min(100%, 460px);                               /* базовый вариант: строго по ширине блока */
+    width:min(100%, 460px, max(200px, calc(100dvh - 210px))); /* + запас по высоте экрана (ландшафт) */
+    aspect-ratio:1;
+    margin:14px auto 0;                                   /* запас сверху под указатель */
+  }
+  #wheel{width:100%;height:100%;max-width:100%;max-height:100%;display:block;filter:drop-shadow(0 10px 28px rgba(0,0,0,.35))}
+  .pointer{
+    position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:0;height:0;
+    border-left:clamp(10px,3.6vw,16px) solid transparent;
+    border-right:clamp(10px,3.6vw,16px) solid transparent;
+    border-top:clamp(20px,6.7vw,30px) solid var(--gold);
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));z-index:3;
+  }
+  .hub{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:clamp(48px,18.7%,86px);height:clamp(48px,18.7%,86px);
+    border-radius:50%;
     background:radial-gradient(circle at 35% 30%,#fff8,#0000 55%),linear-gradient(135deg,var(--accent),var(--accent2));
-    display:flex;align-items:center;justify-content:center;font-size:32px;z-index:2;
-    border:4px solid rgba(255,255,255,.85);box-shadow:0 4px 16px rgba(0,0,0,.35);pointer-events:none}
+    display:flex;align-items:center;justify-content:center;
+    font-size:clamp(20px,7vw,32px);z-index:2;
+    border:clamp(2px,1vw,4px) solid rgba(255,255,255,.85);
+    box-shadow:0 4px 16px rgba(0,0,0,.35);pointer-events:none;
+  }
   .status{text-align:center;color:var(--muted);font-size:14px;margin-top:10px;min-height:20px}
   .status b{color:var(--gold)}
+
   button{font:inherit;cursor:pointer;border:0;border-radius:14px;min-height:46px;padding:10px 16px}
   button:disabled{opacity:.45;cursor:not-allowed}
   .spin{width:100%;margin-top:12px;font-size:19px;font-weight:800;color:#fff;letter-spacing:.4px;
     background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 8px 24px rgba(236,72,153,.35)}
   .spin:active{transform:scale(.985)}
   .row{display:flex;gap:8px}
-  .row>*{flex:1}
-  input[type="text"],textarea{width:100%;font:inherit;color:var(--text);background:var(--card2);
+  .row>*{flex:1;min-width:0}
+  input[type="text"],textarea{width:100%;max-width:100%;font:inherit;color:var(--text);background:var(--card2);
     border:1px solid var(--border);border-radius:14px;padding:12px 14px;outline:none}
   input[type="text"]:focus,textarea:focus{border-color:var(--accent)}
   textarea{min-height:96px;resize:vertical}
@@ -64,10 +119,10 @@
   .hint{color:var(--muted);font-size:13px;margin:8px 0 0;line-height:1.45}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
   .chip{display:inline-flex;align-items:center;gap:7px;background:var(--card2);border:1px solid var(--border);
-    border-radius:999px;padding:7px 8px 7px 13px;font-size:14px;max-width:100%}
-  .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px}
-  .chip button{min-height:28px;width:28px;padding:0;border-radius:50%;background:transparent;color:var(--muted);font-size:16px;line-height:1}
-  .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+    border-radius:999px;padding:7px 8px 7px 13px;font-size:14px;max-width:100%;overflow:hidden}
+  .chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:210px;min-width:0}
+  .chip button{min-height:28px;width:28px;padding:0;border-radius:50%;background:transparent;color:var(--muted);font-size:16px;line-height:1;flex:0 0 auto}
+  .tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
   .switch{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
   .switch:first-of-type{border-top:0}
   .switch label{font-size:15px}
@@ -84,13 +139,15 @@
   .toast.show{opacity:1;transform:translateX(-50%)}
   .overlay{position:fixed;inset:0;background:rgba(10,6,24,.72);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
   .overlay.open{display:flex}
-  .modal{background:var(--card);border:1px solid var(--border);border-radius:22px;max-width:460px;width:100%;
+  .modal{background:var(--card);border:1px solid var(--border);border-radius:22px;
+    max-width:min(460px,100%);width:100%;
     padding:22px 18px;text-align:center;max-height:92vh;overflow:auto}
+  @supports (height:100dvh){ .modal{max-height:92dvh} }
   .modal .trophy{font-size:52px;line-height:1}
   .modal h3{margin:8px 0 2px;font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px}
   .modal .winner-name{font-size:30px;font-weight:900;color:var(--gold);margin:4px 0 6px;word-break:break-word}
   .modal .meta{color:var(--muted);font-size:14px;margin-bottom:14px}
-  .modal img.cardimg{width:100%;border-radius:14px;border:1px solid var(--border);margin:8px 0}
+  .modal img.cardimg{width:100%;max-width:100%;border-radius:14px;border:1px solid var(--border);margin:8px 0}
   .modal .stack{display:grid;gap:8px;margin-top:10px}
   #confetti{position:fixed;inset:0;pointer-events:none;z-index:55;display:none}
   footer{text-align:center;color:var(--muted);font-size:12.5px;margin-top:16px;line-height:1.6}
@@ -107,8 +164,8 @@
     <div id="organizer">Организатор: <b id="organizerName"></b></div>
   </header>
 
-  <section class="card" aria-label="Колесо">
-    <div class="wheel-box">
+  <section class="card card-wheel" aria-label="Колесо">
+    <div class="wheel-box" id="wheelBox">
       <div class="pointer"></div>
       <canvas id="wheel" width="600" height="600"></canvas>
       <div class="hub">🎡</div>
@@ -131,6 +188,8 @@
     </div>
     <div class="chips" id="chips"></div>
     <div class="tools">
+      <button class="btn-accent" id="groupBtn">⬇️ Участники по логину</button>
+      <button class="btn-accent" id="parseBtn">🔍 Парсер групп</button>
       <button class="btn" id="shuffleBtn">🔀 Перемешать</button>
       <button class="btn" id="sortBtn">🔤 По алфавиту</button>
       <button class="btn-danger" id="clearBtn">🗑️ Очистить список</button>
@@ -148,6 +207,11 @@
       <label for="soundToggle">Звук колеса</label>
       <input type="checkbox" id="soundToggle" checked>
     </div>
+    <div class="switch" style="display:block">
+      <label for="gatewayInput">⬇️ Шлюз участников (URL)<br><span class="hint">источник списков для выгрузки по логину группы: например, groups.json рядом с
+      приложением или свой API (подставится {group} в URL)</span></label>
+      <input type="text" id="gatewayInput" placeholder="https://.../groups.json" style="margin-top:8px" spellcheck="false" autocapitalize="off" autocorrect="off">
+    </div>
   </section>
 
   <section class="card" aria-label="Победители">
@@ -163,7 +227,7 @@
   <footer>
     Победитель выбирается <b>криптографически случайным</b> генератором вашего устройства — подкрутить результат невозможно.<br>
     Списки сохраняются только на вашем устройстве и никуда не отправляются.<br>
-    <span class="ver">«Колесо фортуны» • версия 1.0.0 • MiniApp для Gem Space</span>
+    <span class="ver">«Колесо фортуны» • версия 1.3.0 • MiniApp для Gem Space</span>
     <br><button id="closeBtn">Закрыть приложение</button>
   </footer>
 </div>
@@ -187,6 +251,56 @@
 </div>
 
 <canvas id="confetti"></canvas>
+
+<div class="overlay" id="parseOverlay" role="dialog" aria-modal="true">
+  <div class="modal" style="text-align:left">
+    <h3 style="margin:0 0 6px;text-align:center">🔍 Парсер участников</h3>
+    <p class="hint" style="margin:0 0 10px">
+      Скопируйте <b>любой список</b> и вставьте сюда: участников группы, комментарии
+      под постом розыгрыша или пересланные сообщения. Парсер сам извлечёт имена и
+      @ники, уберёт нумерацию, маркеры и дубли.<br>
+      <span style="opacity:.8">(Gem Space не открывает список участников групп
+      мини-аппам — поэтому быстрый способ именно такой: выделить и вставить.)</span>
+    </p>
+    <textarea id="parseInput" placeholder="Например:&#10;Участники группы:&#10;1. Anna Smile @anna_smile&#10;2. Ivan Petrov @ivan_petrov&#10;3. gemarina&#10;&#10;Или комментарии:&#10;@dmitry_k: участвую!&#10;Olga Sun: я тоже 🙌"></textarea>
+    <div class="switch" style="border-top:0;padding:10px 0 2px">
+      <label for="parseOnlyAt">Брать только @ники<br><span class="hint">игнорировать имена без @</span></label>
+      <input type="checkbox" id="parseOnlyAt">
+    </div>
+    <div class="chips" id="parsePreview" style="margin:8px 0 2px;max-height:132px;overflow:auto"></div>
+    <div class="status" id="parseCount" style="text-align:left;margin:4px 0 8px"></div>
+    <div class="stack">
+      <button class="btn-accent" id="parseAddBtn">➕ Добавить в колесо</button>
+      <button class="btn" id="parseCancelBtn">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="groupOverlay" role="dialog" aria-modal="true">
+  <div class="modal" style="text-align:left">
+    <h3 style="margin:0 0 6px;text-align:center">⬇️ Участники по логину</h3>
+    <p class="hint" style="margin:0 0 10px">
+      Укажите <b>@логин группы</b> — приложение загрузит сохранённый список её
+      участников из «шлюза участников» (настраивается в «Настройках розыгрыша»).<br>
+      <span style="opacity:.8">Gem Space не выдаёт мини-аппам списки участников групп
+      напрямую (официальный API этого не позволяет), поэтому источник — ваш сохранённый
+      список: обновляйте его «🔍 Парсером групп» по мере пополнения группы. Когда
+      платформа даст официальный доступ — просто подставьте его URL в шлюз.</span>
+    </p>
+    <div class="row">
+      <input type="text" id="groupLogin" placeholder="@логин_группы" maxlength="64" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button class="btn-accent" id="groupLoadBtn" style="flex:0 0 auto">⬇️ Выгрузить</button>
+    </div>
+    <div class="status" id="groupStatus" style="text-align:left;margin:10px 0 4px"></div>
+    <div class="chips" id="groupPreview" style="margin:6px 0 2px;max-height:132px;overflow:auto"></div>
+    <div class="stack">
+      <button class="btn-accent" id="groupAddBtn" style="display:none">➕ Добавить в колесо</button>
+      <button class="btn" id="groupExportBtn">💾 Скопировать список колеса как JSON</button>
+      <button class="btn" id="groupCancelBtn">Закрыть</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -224,13 +338,14 @@ const MAX_PARTS = 200, MAX_NAME = 40;
 const PALETTE = ['#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#a855f7','#f97316','#06b6d4','#84cc16','#e879f9','#fbbf24'];
 let participants = [];
 let winners = []; // {name, place, total, at}
-let settings = { removeWinner:true, sound:true };
+let settings = { removeWinner:true, sound:true, gateway:'' };
 let organizer = '';
 let rotation = 0, spinning = false, lastTickSeg = -1;
 let lastWinnerIdx = -1;
 
 const $ = id => document.getElementById(id);
 const canvas = $('wheel'), ctx = canvas.getContext('2d');
+const wheelBox = $('wheelBox');
 
 function toast(msg){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -252,6 +367,53 @@ function cleanName(raw){
 function parseList(text){
   return String(text||'').split(/[\r\n,;]+/).map(cleanName).filter(Boolean);
 }
+/* ================= Парсер групп (v1.2.0) =================
+   Извлекает участников из любого скопированного текста: список членов группы,
+   комментарии под постом, пересланные сообщения. Правила:
+   • строки с @никами → берётся @ник (все подряд в режиме «только @ники»);
+   • «Имя: текст» → берётся имя (автор комментария);
+   • отбрасываются нумерация, маркеры списков, кавычки, служебные пометки
+     (админ)/(модератор), заголовки и строки-числа;
+   • дубли убираются без учёта регистра. */
+function parseSmart(text, onlyAt){
+  const out = [], seen = new Set();
+  const push = n => {
+    if(!n) return;
+    const k = n.toLowerCase();
+    if(seen.has(k)) return;
+    seen.add(k); out.push(n);
+  };
+  String(text||'').split(/[\r\n]+/).forEach(function(rawLine){
+    const line = String(rawLine).trim();
+    if(!line || /:$/.test(line)) return; // пустые строки и заголовки-«ярлыки» («Участники группы:»)
+    line.split(/[;,\t]+/).forEach(function(item){
+      let s = String(item).trim();
+      if(!s) return;
+      // маркеры списков: •, -, *, 1., 2), 3 —
+      s = s.replace(/^\s*(?:[•●▪◦*\-–—]|\d{1,4}\s*[\.\)\-–—:])\s*/, '').trim();
+      s = s.replace(/^["'«»]+|["'«»]+$/g, '').trim();
+      if(!s) return;
+      // @ники (храним без @, чтобы @ivan и ivan считались одним участником)
+      const ats = s.match(/@[\w.\-]{2,40}/g) || [];
+      if(ats.length){
+        if(onlyAt){ ats.forEach(a => push(a.replace(/^@/,''))); }
+        else { push(ats[0].replace(/^@/,'')); }
+        return;
+      }
+      if(onlyAt) return;
+      // «Имя: комментарий» → имя
+      const colon = s.indexOf(':');
+      if(colon > 0 && colon < 40) s = s.slice(0, colon).trim();
+      // служебные пометки в конце: (админ), (модератор)…
+      s = s.replace(/\s*\((?:админ|модератор|организатор|участник|admin|moderator)\)\s*$/i, '').trim();
+      // заголовки («Всего», «Участники»), числа, слишком длинные строки
+      if(!s || s.length > 60 || /^\d+$/.test(s)) return;
+      if(/^(?:всего|участники|участников|человек|members|админы|модераторы)(?=$|[^A-Za-zА-Яа-яЁё0-9_])/i.test(s)) return;
+      push(cleanName(s));
+    });
+  });
+  return out;
+}
 function addNames(list){
   const seen = new Set(participants.map(x=>x.toLowerCase()));
   let added = 0, dup = 0, over = 0;
@@ -264,9 +426,19 @@ function addNames(list){
 }
 
 /* ================= Отрисовка колеса ================= */
+/* Колесо всегда занимает ровно свой блок (.wheel-box), а блок вписан в карточку:
+   размер canvas берётся от контейнера, а не от вьюпорта.
+   Плюс runtime-страховка: реальная ширина содержимого карточки измеряется при
+   каждом ресайзе и ограничивает колесо даже там, где min()/clamp() не работают. */
 function fitCanvas(){
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const size = canvas.clientWidth || 320;
+  const card = wheelBox.parentElement;
+  if(card && card.clientWidth){
+    const cs = getComputedStyle(card);
+    const maxW = Math.max(160, card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+    wheelBox.style.maxWidth = Math.round(maxW) + 'px';
+  }
+  const size = Math.max(120, Math.round(wheelBox.clientWidth || 320));
   canvas.width = Math.round(size * dpr); canvas.height = Math.round(size * dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   drawWheel();
@@ -278,7 +450,7 @@ function truncateToWidth(text, maxW){
   return s + '…';
 }
 function drawWheel(){
-  const size = canvas.clientWidth || 320;
+  const size = Math.max(120, Math.round(wheelBox.clientWidth || canvas.clientWidth || 320));
   const cx = size/2, cy = size/2, R = size/2 - 8;
   ctx.clearRect(0,0,size,size);
   // внешний обод
@@ -318,7 +490,7 @@ function drawWheel(){
     }
   }
   // центральный круг под ступицей
-  ctx.beginPath(); ctx.arc(cx,cy,Math.max(28, size*0.085),0,Math.PI*2);
+  ctx.beginPath(); ctx.arc(cx,cy,Math.max(24, size*0.085),0,Math.PI*2);
   ctx.fillStyle = '#ffffff'; ctx.fill();
 }
 
@@ -557,7 +729,7 @@ $('addBtn').onclick = function(){
 };
 $('nameInput').addEventListener('keydown', function(e){ if(e.key === 'Enter') $('addBtn').click(); });
 $('bulkBtn').onclick = function(){
-  const list = parseList($('bulkInput').value);
+  const list = parseSmart($('bulkInput').value, false);
   if(!list.length){ toast('Вставьте список имен в поле выше'); return; }
   const r = addNames(list);
   $('bulkInput').value = '';
@@ -565,6 +737,149 @@ $('bulkBtn').onclick = function(){
   if(r.dup) msg += ' • дублей пропущено: ' + r.dup;
   if(r.over) msg += ' • сверх лимита: ' + r.over;
   toast(msg); saveAll(); renderAll();
+};
+/* ================= Парсер групп: модалка и предпросмотр ================= */
+function parsePreviewNow(){
+  const list = parseSmart($('parseInput').value, $('parseOnlyAt').checked);
+  const box = $('parsePreview'); box.innerHTML = '';
+  list.slice(0, 24).forEach(function(n){
+    const d = document.createElement('span'); d.className = 'chip';
+    const s = document.createElement('span'); s.textContent = n;
+    d.appendChild(s); box.appendChild(d);
+  });
+  if(list.length > 24){
+    const more = document.createElement('span'); more.className = 'chip';
+    more.textContent = '… и ещё ' + (list.length - 24);
+    box.appendChild(more);
+  }
+  const already = new Set(participants.map(x => x.toLowerCase()));
+  const fresh = list.filter(n => !already.has(n.toLowerCase())).length;
+  $('parseCount').innerHTML = list.length
+    ? 'Найдено: <b>' + list.length + '</b> • новых для колеса: <b>' + fresh + '</b>'
+    : 'Пока ничего не найдено — вставьте текст выше.';
+  $('parseAddBtn').disabled = fresh === 0;
+}
+$('parseBtn').onclick = function(){
+  if(spinning) return;
+  $('parseOverlay').classList.add('open');
+  parsePreviewNow();
+};
+$('parseInput').addEventListener('input', parsePreviewNow);
+$('parseOnlyAt').onchange = parsePreviewNow;
+$('parseCancelBtn').onclick = function(){ $('parseOverlay').classList.remove('open'); };
+$('parseOverlay').addEventListener('click', function(e){ if(e.target === this) this.classList.remove('open'); });
+$('parseAddBtn').onclick = function(){
+  const list = parseSmart($('parseInput').value, $('parseOnlyAt').checked);
+  if(!list.length){ toast('Вставьте список участников или комментарии'); return; }
+  const r = addNames(list);
+  $('parseInput').value = '';
+  $('parseOverlay').classList.remove('open');
+  let msg = 'Добавлено из списка: ' + r.added;
+  if(r.dup) msg += ' • дублей пропущено: ' + r.dup;
+  if(r.over) msg += ' • сверх лимита: ' + r.over;
+  toast(msg); saveAll(); renderAll();
+};
+/* ================= Выгрузка участников по логину группы (v1.3.0) =================
+   Источник — «шлюз участников» (URL из настроек). Поддерживаемые форматы ответа:
+   • { "my_group": ["Имя", "@ник", ...] }        — карта групп (groups.json);
+   • { "groups": { "my_group": [...] } }         — карта с обёрткой;
+   • { "members": ["...", ...] }                 — список (для URL с {group});
+   • [ "...", ... ]                              — голый массив;
+   • элементы-объекты: {username|name|display_name}.
+   URL шлюза может содержать плейсхолдер {group} — он заменится на логин. */
+function groupNormalize(arr){
+  return (Array.isArray(arr) ? arr : []).map(function(x){
+    if(typeof x === 'string') return cleanName(x);
+    if(x && typeof x === 'object') return cleanName(x.username || x.name || x.display_name || x.displayName || '');
+    return '';
+  }).filter(Boolean);
+}
+let groupLoaded = [];
+function groupRenderPreview(){
+  const box = $('groupPreview'); box.innerHTML = '';
+  groupLoaded.slice(0, 24).forEach(function(n){
+    const d = document.createElement('span'); d.className = 'chip';
+    const s = document.createElement('span'); s.textContent = n;
+    d.appendChild(s); box.appendChild(d);
+  });
+  if(groupLoaded.length > 24){
+    const more = document.createElement('span'); more.className = 'chip';
+    more.textContent = '… и ещё ' + (groupLoaded.length - 24);
+    box.appendChild(more);
+  }
+  const already = new Set(participants.map(x => x.toLowerCase()));
+  return groupLoaded.filter(n => !already.has(n.toLowerCase())).length;
+}
+async function loadGroupMembers(){
+  const login = $('groupLogin').value.replace(/^[@\s]+/,'').trim();
+  const st = $('groupStatus');
+  groupLoaded = []; $('groupPreview').innerHTML = '';
+  $('groupAddBtn').style.display = 'none';
+  if(!login){ st.textContent = 'Введите @логин группы.'; return; }
+  const gw = String(settings.gateway || '').trim();
+  if(!gw){
+    st.innerHTML = '⚠️ Шлюз участников не настроен. Откройте «⚙️ Настройки розыгрыша» → ' +
+      '«Шлюз участников» и укажите URL источника (например, groups.json рядом с приложением). ' +
+      'Пока шлюз не настроен — воспользуйтесь «🔍 Парсер групп».';
+    return;
+  }
+  st.textContent = 'Загружаю…';
+  $('groupLoadBtn').disabled = true;
+  try{
+    const hasPh = gw.includes('{group}');
+    const url = hasPh ? gw.replace('{group}', encodeURIComponent(login)) : gw;
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('сервер ответил ' + res.status);
+    const data = await res.json();
+    /* Сопоставление с логином:
+       • карты { "login": [...] } / { "groups": { "login": [...] } } — работают всегда;
+       • {"members": [...]} и голый массив — только если в URL шлюза есть {group}
+         (адрес уже указывает на конкретную группу). */
+    let raw = null;
+    if(data && data.groups && Array.isArray(data.groups[login])) raw = data.groups[login];
+    else if(data && Array.isArray(data[login])) raw = data[login];
+    else if(hasPh && Array.isArray(data && data.members)) raw = data.members;
+    else if(hasPh && Array.isArray(data)) raw = data;
+    const list = groupNormalize(raw);
+    if(!list.length) throw new Error('в источнике нет участников для @' + login);
+    groupLoaded = list;
+    const fresh = groupRenderPreview();
+    $('groupAddBtn').style.display = 'block';
+    st.innerHTML = 'Группа <b>@' + escapeHtml(login) + '</b>: найдено <b>' + list.length +
+      '</b> • новых для колеса: <b>' + fresh + '</b>';
+  }catch(e){
+    st.innerHTML = '⚠️ Не удалось выгрузить: ' + escapeHtml(String(e && e.message || e)) + '.<br>' +
+      'Проверьте логин группы и URL шлюза в настройках. Если шлюз не настроен — ' +
+      'воспользуйтесь «🔍 Парсер групп»: вставьте скопированный список участников.';
+  }
+  $('groupLoadBtn').disabled = false;
+}
+$('groupBtn').onclick = function(){
+  if(spinning) return;
+  $('groupOverlay').classList.add('open');
+  $('groupStatus').textContent = settings.gateway ? 'Введите @логин группы и нажмите «Выгрузить».' : '';
+  if(!settings.gateway){
+    $('groupStatus').innerHTML = '⚠️ Шлюз участников ещё не настроен — укажите URL источника в ' +
+      '«⚙️ Настройках розыгрыша», либо воспользуйтесь «🔍 Парсер групп».';
+  }
+};
+$('groupLoadBtn').onclick = loadGroupMembers;
+$('groupLogin').addEventListener('keydown', function(e){ if(e.key === 'Enter') loadGroupMembers(); });
+$('groupCancelBtn').onclick = function(){ $('groupOverlay').classList.remove('open'); };
+$('groupOverlay').addEventListener('click', function(e){ if(e.target === this) this.classList.remove('open'); });
+$('groupAddBtn').onclick = function(){
+  if(!groupLoaded.length){ toast('Сначала выгрузите участников'); return; }
+  const r = addNames(groupLoaded);
+  groupLoaded = [];
+  $('groupOverlay').classList.remove('open');
+  let msg = 'Добавлено по логину: ' + r.added;
+  if(r.dup) msg += ' • дублей пропущено: ' + r.dup;
+  if(r.over) msg += ' • сверх лимита: ' + r.over;
+  toast(msg); saveAll(); renderAll();
+};
+$('groupExportBtn').onclick = function(){
+  if(!participants.length){ toast('Список участников пуст'); return; }
+  copyText(JSON.stringify(participants, null, 2), 'Список скопирован как JSON — вставьте в groups.json ✅');
 };
 $('demoBtn').onclick = function(){
   const r = addNames(['anna_smile','ivan_petrov','gemarina','dmitry_k','olga_sun','max_power','katya_star','alex_wolf']);
@@ -593,12 +908,14 @@ $('restoreBtn').onclick = function(){
   if(!winners.length){ toast('Победителей пока нет — возвращать некого'); return; }
   const names = winners.map(w=>w.name);
   winners = [];
+  lastWinnerIdx = -1;
   const r = addNames(names);
   saveAll(); renderAll();
   toast('Розыгрыш сброшен, возвращено участников: ' + r.added);
 };
 $('removeWinner').onchange = function(){ settings.removeWinner = this.checked; saveAll(); };
 $('soundToggle').onchange = function(){ settings.sound = this.checked; saveAll(); };
+$('gatewayInput').addEventListener('input', function(){ settings.gateway = this.value.trim(); saveAll(); });
 $('cardBtn').onclick = function(){
   const w = winners[winners.length-1];
   if(!w){ toast('Сначала проведите розыгрыш 🙂'); return; }
@@ -618,7 +935,14 @@ $('modalSpinBtn').onclick = function(){
 };
 $('modalCloseBtn').onclick = closeModal;
 $('overlay').addEventListener('click', function(e){ if(e.target === this) closeModal(); });
+
+/* Перерисовка при любом изменении размера контейнера/окна:
+   поворот экрана, изменение размера WebView, свёртывание клавиатуры и т.п. */
+if(window.ResizeObserver){
+  new ResizeObserver(function(){ fitCanvas(); }).observe(wheelBox);
+}
 window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', function(){ setTimeout(fitCanvas, 120); });
 
 /* ================= Загрузка и старт ================= */
 async function loadAll(){
@@ -633,6 +957,7 @@ async function loadAll(){
   lastWinnerIdx = winners.length - 1;
   $('removeWinner').checked = !!settings.removeWinner;
   $('soundToggle').checked = !!settings.sound;
+  $('gatewayInput').value = settings.gateway || '';
 }
 async function boot(){
   await loadAll();
@@ -660,5 +985,5 @@ async function boot(){
 }
 boot();
 </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a51258723f1ae48a',t:'MTc5MzExMDg2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
