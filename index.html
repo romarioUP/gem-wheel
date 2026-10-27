@@ -6,7 +6,13 @@
 <title>Колесо фортуны — честный розыгрыш призов</title>
 <meta name="description" content="Честное колесо фортуны для розыгрышей в сообществах Gem Space: добавьте участников, крутите барабан и делитесь карточкой победителя.">
 <!--
-  «Колесо фортуны» • MiniApp для Gem Space • v1.3.0
+  «Колесо фортуны» • MiniApp для Gem Space • v1.4.0
+  Изменения в 1.4.0:
+  • «Участники по логину» переделаны в «Сохранённые списки» — без внешних файлов
+    и настроек: участники сохраняются под @логином группы прямо в приложении и
+    загружаются в колесо в один клик. Управление списками: сохранить, обновить,
+    выбрать, удалить. (Прямая выгрузка из групп Gem Space невозможна для любых
+    мини-аппов — платформа не предоставляет API участников; проверено.)
   Изменения в 1.3.0:
   • «Участники по логину» — выгрузка списка участников по @логину группы из
     настраиваемого «шлюза участников» (например, groups.json рядом с приложением,
@@ -188,7 +194,7 @@
     </div>
     <div class="chips" id="chips"></div>
     <div class="tools">
-      <button class="btn-accent" id="groupBtn">⬇️ Участники по логину</button>
+      <button class="btn-accent" id="groupBtn">📚 Участники по логину</button>
       <button class="btn-accent" id="parseBtn">🔍 Парсер групп</button>
       <button class="btn" id="shuffleBtn">🔀 Перемешать</button>
       <button class="btn" id="sortBtn">🔤 По алфавиту</button>
@@ -207,11 +213,6 @@
       <label for="soundToggle">Звук колеса</label>
       <input type="checkbox" id="soundToggle" checked>
     </div>
-    <div class="switch" style="display:block">
-      <label for="gatewayInput">⬇️ Шлюз участников (URL)<br><span class="hint">источник списков для выгрузки по логину группы: например, groups.json рядом с
-      приложением или свой API (подставится {group} в URL)</span></label>
-      <input type="text" id="gatewayInput" placeholder="https://.../groups.json" style="margin-top:8px" spellcheck="false" autocapitalize="off" autocorrect="off">
-    </div>
   </section>
 
   <section class="card" aria-label="Победители">
@@ -227,7 +228,7 @@
   <footer>
     Победитель выбирается <b>криптографически случайным</b> генератором вашего устройства — подкрутить результат невозможно.<br>
     Списки сохраняются только на вашем устройстве и никуда не отправляются.<br>
-    <span class="ver">«Колесо фортуны» • версия 1.3.0 • MiniApp для Gem Space</span>
+    <span class="ver">«Колесо фортуны» • версия 1.4.0 • MiniApp для Gem Space</span>
     <br><button id="closeBtn">Закрыть приложение</button>
   </footer>
 </div>
@@ -278,26 +279,26 @@
 
 <div class="overlay" id="groupOverlay" role="dialog" aria-modal="true">
   <div class="modal" style="text-align:left">
-    <h3 style="margin:0 0 6px;text-align:center">⬇️ Участники по логину</h3>
+    <h3 style="margin:0 0 6px;text-align:center">📚 Участники по логину</h3>
     <p class="hint" style="margin:0 0 10px">
-      Укажите <b>@логин группы</b> — приложение загрузит сохранённый список её
-      участников из «шлюза участников» (настраивается в «Настройках розыгрыша»).<br>
-      <span style="opacity:.8">Gem Space не выдаёт мини-аппам списки участников групп
-      напрямую (официальный API этого не позволяет), поэтому источник — ваш сохранённый
-      список: обновляйте его «🔍 Парсером групп» по мере пополнения группы. Когда
-      платформа даст официальный доступ — просто подставьте его URL в шлюз.</span>
+      Сохраните участников группы под её <b>@логином</b> — и загружайте в колесо в один
+      клик. Списки хранятся на вашем устройстве; обновляются «🔍 Парсером групп» по мере
+      пополнения группы.
     </p>
     <div class="row">
       <input type="text" id="groupLogin" placeholder="@логин_группы" maxlength="64" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <button class="btn-accent" id="groupLoadBtn" style="flex:0 0 auto">⬇️ Выгрузить</button>
+      <button class="btn-accent" id="groupLoadBtn" style="flex:0 0 auto">⬇️ Загрузить</button>
     </div>
     <div class="status" id="groupStatus" style="text-align:left;margin:10px 0 4px"></div>
-    <div class="chips" id="groupPreview" style="margin:6px 0 2px;max-height:132px;overflow:auto"></div>
+    <div class="chips" id="groupPreview" style="margin:6px 0 2px;max-height:120px;overflow:auto"></div>
     <div class="stack">
       <button class="btn-accent" id="groupAddBtn" style="display:none">➕ Добавить в колесо</button>
-      <button class="btn" id="groupExportBtn">💾 Скопировать список колеса как JSON</button>
+      <button class="btn" id="groupSaveBtn">💾 Сохранить текущий список под этим логином</button>
+      <button class="btn" id="groupExportBtn">📋 Скопировать все списки как JSON</button>
       <button class="btn" id="groupCancelBtn">Закрыть</button>
     </div>
+    <p class="hint" style="margin-top:12px">Сохранённые списки (нажмите, чтобы загрузить):</p>
+    <div class="chips" id="listsBox" style="margin-top:6px"></div>
   </div>
 </div>
 
@@ -333,12 +334,13 @@ const Store = {
 };
 
 /* ================= Состояние ================= */
-const KEYS = { parts:'wheel.participants', winners:'wheel.winners', settings:'wheel.settings' };
+const KEYS = { parts:'wheel.participants', winners:'wheel.winners', settings:'wheel.settings', lists:'wheel.lists' };
 const MAX_PARTS = 200, MAX_NAME = 40;
 const PALETTE = ['#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#a855f7','#f97316','#06b6d4','#84cc16','#e879f9','#fbbf24'];
 let participants = [];
 let winners = []; // {name, place, total, at}
-let settings = { removeWinner:true, sound:true, gateway:'' };
+let settings = { removeWinner:true, sound:true };
+let groupLists = {}; // { "my_group": ["Имя", ...] } — сохранённые списки участников
 let organizer = '';
 let rotation = 0, spinning = false, lastTickSeg = -1;
 let lastWinnerIdx = -1;
@@ -534,6 +536,7 @@ function saveAll(){
     Store.set(KEYS.parts, JSON.stringify(participants));
     Store.set(KEYS.winners, JSON.stringify(winners));
     Store.set(KEYS.settings, JSON.stringify(settings));
+    Store.set(KEYS.lists, JSON.stringify(groupLists));
   }, 150);
 }
 
@@ -779,14 +782,11 @@ $('parseAddBtn').onclick = function(){
   if(r.over) msg += ' • сверх лимита: ' + r.over;
   toast(msg); saveAll(); renderAll();
 };
-/* ================= Выгрузка участников по логину группы (v1.3.0) =================
-   Источник — «шлюз участников» (URL из настроек). Поддерживаемые форматы ответа:
-   • { "my_group": ["Имя", "@ник", ...] }        — карта групп (groups.json);
-   • { "groups": { "my_group": [...] } }         — карта с обёрткой;
-   • { "members": ["...", ...] }                 — список (для URL с {group});
-   • [ "...", ... ]                              — голый массив;
-   • элементы-объекты: {username|name|display_name}.
-   URL шлюза может содержать плейсхолдер {group} — он заменится на логин. */
+/* ================= Участники по логину: сохранённые списки (v1.4.0) =================
+   Gem Space не выдаёт мини-аппам списки участников групп (официальный API этого
+   не позволяет — проверено), поэтому участники сохраняются под @логином группы
+   в хранилище приложения и загружаются в колесо в один клик.
+   Элементы списков: строки или объекты {username|name|display_name}. */
 function groupNormalize(arr){
   return (Array.isArray(arr) ? arr : []).map(function(x){
     if(typeof x === 'string') return cleanName(x);
@@ -810,60 +810,69 @@ function groupRenderPreview(){
   const already = new Set(participants.map(x => x.toLowerCase()));
   return groupLoaded.filter(n => !already.has(n.toLowerCase())).length;
 }
-async function loadGroupMembers(){
+function renderLists(){
+  const box = $('listsBox'); box.innerHTML = '';
+  const keys = Object.keys(groupLists).sort();
+  if(!keys.length){
+    const p = document.createElement('span'); p.className = 'hint'; p.style.margin = '0';
+    p.textContent = 'Пока нет сохранённых списков.';
+    box.appendChild(p); return;
+  }
+  keys.forEach(function(k){
+    const d = document.createElement('span'); d.className = 'chip'; d.style.cursor = 'pointer';
+    const s = document.createElement('span'); s.textContent = '@' + k + ' (' + groupLists[k].length + ')';
+    d.appendChild(s);
+    d.onclick = function(){ $('groupLogin').value = k; loadGroupMembers(); };
+    const x = document.createElement('button'); x.textContent = '✕'; x.title = 'Удалить список';
+    x.onclick = function(e){
+      e.stopPropagation();
+      if(x.dataset.arm === '1'){
+        delete groupLists[k]; saveAll(); renderLists(); toast('Список @' + k + ' удалён');
+      } else {
+        x.dataset.arm = '1'; x.textContent = '?'; x.title = 'Нажмите ещё раз для удаления';
+        setTimeout(function(){ if(x.isConnected){ x.dataset.arm = '0'; x.textContent = '✕'; x.title = 'Удалить список'; } }, 3000);
+      }
+    };
+    d.appendChild(x); box.appendChild(d);
+  });
+}
+function loadGroupMembers(){
   const login = $('groupLogin').value.replace(/^[@\s]+/,'').trim();
   const st = $('groupStatus');
   groupLoaded = []; $('groupPreview').innerHTML = '';
   $('groupAddBtn').style.display = 'none';
   if(!login){ st.textContent = 'Введите @логин группы.'; return; }
-  const gw = String(settings.gateway || '').trim();
-  if(!gw){
-    st.innerHTML = '⚠️ Шлюз участников не настроен. Откройте «⚙️ Настройки розыгрыша» → ' +
-      '«Шлюз участников» и укажите URL источника (например, groups.json рядом с приложением). ' +
-      'Пока шлюз не настроен — воспользуйтесь «🔍 Парсер групп».';
+  const list = groupNormalize(groupLists[login]);
+  if(!list.length){
+    st.innerHTML = 'Для <b>@' + escapeHtml(login) + '</b> сохранённого списка пока нет.<br>' +
+      'Соберите участников «🔍 Парсером групп» и нажмите «💾 Сохранить текущий список».';
     return;
   }
-  st.textContent = 'Загружаю…';
-  $('groupLoadBtn').disabled = true;
-  try{
-    const hasPh = gw.includes('{group}');
-    const url = hasPh ? gw.replace('{group}', encodeURIComponent(login)) : gw;
-    const res = await fetch(url, {cache:'no-store'});
-    if(!res.ok) throw new Error('сервер ответил ' + res.status);
-    const data = await res.json();
-    /* Сопоставление с логином:
-       • карты { "login": [...] } / { "groups": { "login": [...] } } — работают всегда;
-       • {"members": [...]} и голый массив — только если в URL шлюза есть {group}
-         (адрес уже указывает на конкретную группу). */
-    let raw = null;
-    if(data && data.groups && Array.isArray(data.groups[login])) raw = data.groups[login];
-    else if(data && Array.isArray(data[login])) raw = data[login];
-    else if(hasPh && Array.isArray(data && data.members)) raw = data.members;
-    else if(hasPh && Array.isArray(data)) raw = data;
-    const list = groupNormalize(raw);
-    if(!list.length) throw new Error('в источнике нет участников для @' + login);
-    groupLoaded = list;
-    const fresh = groupRenderPreview();
-    $('groupAddBtn').style.display = 'block';
-    st.innerHTML = 'Группа <b>@' + escapeHtml(login) + '</b>: найдено <b>' + list.length +
-      '</b> • новых для колеса: <b>' + fresh + '</b>';
-  }catch(e){
-    st.innerHTML = '⚠️ Не удалось выгрузить: ' + escapeHtml(String(e && e.message || e)) + '.<br>' +
-      'Проверьте логин группы и URL шлюза в настройках. Если шлюз не настроен — ' +
-      'воспользуйтесь «🔍 Парсер групп»: вставьте скопированный список участников.';
-  }
-  $('groupLoadBtn').disabled = false;
+  groupLoaded = list;
+  const fresh = groupRenderPreview();
+  $('groupAddBtn').style.display = 'block';
+  st.innerHTML = 'Список <b>@' + escapeHtml(login) + '</b>: найдено <b>' + list.length +
+    '</b> • новых для колеса: <b>' + fresh + '</b>';
+}
+function saveCurrentList(){
+  const login = $('groupLogin').value.replace(/^[@\s]+/,'').trim();
+  if(!login){ toast('Введите @логин группы'); return; }
+  if(!participants.length){ toast('Список колеса пуст — сначала добавьте участников (🔍 Парсер групп)'); return; }
+  const isNew = !groupLists[login];
+  groupLists[login] = participants.slice();
+  saveAll(); renderLists();
+  $('groupStatus').innerHTML = 'Список <b>@' + escapeHtml(login) + '</b> ' +
+    (isNew ? 'сохранён' : 'обновлён') + ': <b>' + participants.length + '</b> участников.';
+  toast((isNew ? 'Список @' + login + ' сохранён: ' : 'Список @' + login + ' обновлён: ') + participants.length + ' участников');
 }
 $('groupBtn').onclick = function(){
   if(spinning) return;
   $('groupOverlay').classList.add('open');
-  $('groupStatus').textContent = settings.gateway ? 'Введите @логин группы и нажмите «Выгрузить».' : '';
-  if(!settings.gateway){
-    $('groupStatus').innerHTML = '⚠️ Шлюз участников ещё не настроен — укажите URL источника в ' +
-      '«⚙️ Настройках розыгрыша», либо воспользуйтесь «🔍 Парсер групп».';
-  }
+  renderLists();
+  $('groupStatus').textContent = 'Введите @логин группы и нажмите «Загрузить» или «Сохранить».';
 };
 $('groupLoadBtn').onclick = loadGroupMembers;
+$('groupSaveBtn').onclick = saveCurrentList;
 $('groupLogin').addEventListener('keydown', function(e){ if(e.key === 'Enter') loadGroupMembers(); });
 $('groupCancelBtn').onclick = function(){ $('groupOverlay').classList.remove('open'); };
 $('groupOverlay').addEventListener('click', function(e){ if(e.target === this) this.classList.remove('open'); });
@@ -878,8 +887,9 @@ $('groupAddBtn').onclick = function(){
   toast(msg); saveAll(); renderAll();
 };
 $('groupExportBtn').onclick = function(){
-  if(!participants.length){ toast('Список участников пуст'); return; }
-  copyText(JSON.stringify(participants, null, 2), 'Список скопирован как JSON — вставьте в groups.json ✅');
+  const keys = Object.keys(groupLists);
+  if(!keys.length){ toast('Сохранённых списков пока нет'); return; }
+  copyText(JSON.stringify(groupLists, null, 2), 'Списки скопированы как JSON ✅');
 };
 $('demoBtn').onclick = function(){
   const r = addNames(['anna_smile','ivan_petrov','gemarina','dmitry_k','olga_sun','max_power','katya_star','alex_wolf']);
@@ -915,7 +925,6 @@ $('restoreBtn').onclick = function(){
 };
 $('removeWinner').onchange = function(){ settings.removeWinner = this.checked; saveAll(); };
 $('soundToggle').onchange = function(){ settings.sound = this.checked; saveAll(); };
-$('gatewayInput').addEventListener('input', function(){ settings.gateway = this.value.trim(); saveAll(); });
 $('cardBtn').onclick = function(){
   const w = winners[winners.length-1];
   if(!w){ toast('Сначала проведите розыгрыш 🙂'); return; }
@@ -949,15 +958,17 @@ async function loadAll(){
   try {
     const p = await Store.get(KEYS.parts); if(p) participants = JSON.parse(p) || [];
     const w = await Store.get(KEYS.winners); if(w) winners = JSON.parse(w) || [];
+    const l = await Store.get(KEYS.lists); if(l) groupLists = JSON.parse(l) || {};
     const s = await Store.get(KEYS.settings);
     if(s){ const parsed = JSON.parse(s); if(parsed) settings = Object.assign(settings, parsed); }
   } catch(e){}
   if(!Array.isArray(participants)) participants = [];
   if(!Array.isArray(winners)) winners = [];
+  if(!groupLists || typeof groupLists !== 'object') groupLists = {};
+  delete settings.gateway;
   lastWinnerIdx = winners.length - 1;
   $('removeWinner').checked = !!settings.removeWinner;
   $('soundToggle').checked = !!settings.sound;
-  $('gatewayInput').value = settings.gateway || '';
 }
 async function boot(){
   await loadAll();
@@ -985,5 +996,5 @@ async function boot(){
 }
 boot();
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a51258723f1ae48a',t:'MTc5MzExMDg2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a51453b05dd8fea7',t:'MTc5MzEzMTY0NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
